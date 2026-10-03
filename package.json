@@ -1,0 +1,21 @@
+{
+  "name": "trailscape",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GPX ログを 3D のジオラマで再生するローカル完結のビューア",
+  "author": "たぬ",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.2",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

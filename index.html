@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<!--CSP-->
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Trailscape — GPX を 3D で歩く</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%236a5cff'/%3E%3Cstop offset='.5' stop-color='%23ff5ca8'/%3E%3Cstop offset='1' stop-color='%23ffc35c'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='%230a0f1e'/%3E%3Cpath d='M12 46c8-2 10-14 18-16s9 10 16 6 4-16 6-20' fill='none' stroke='url(%23g)' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='52' cy='16' r='5' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<div id="viewport" aria-label="3D ビュー"></div>
+<div id="labels"></div>
+<div id="pick-tip" class="pick-tip" hidden></div>
+
+<div class="ui" id="ui">
+  <header class="topbar">
+    <div class="brand glass">
+      <div class="logo" aria-hidden="true"></div>
+      <div class="brand-text">
+        <div class="title" id="track-name">Trailscape</div>
+        <div class="sub" id="track-date">GPX を 3D で歩く</div>
+      </div>
+    </div>
+    <nav class="toolbar glass" aria-label="ツール">
+      <div class="seg" id="cam-seg" role="radiogroup" aria-label="カメラ">
+        <button type="button" data-cam="overview" class="on" title="俯瞰（1）">俯瞰</button>
+        <button type="button" data-cam="follow" title="追従（2）">追従</button>
+        <button type="button" data-cam="first" title="一人称（3）">一人称</button>
+        <button type="button" data-cam="drone" title="空撮（4）">空撮</button>
+      </div>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" class="icon-btn" id="btn-open" title="GPX を開く（O）" aria-label="GPX を開く">
+        <svg viewBox="0 0 24 24"><path d="M4 7.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9.5a2 2 0 0 0-2-2h-6.5L9.5 5H6a2 2 0 0 0-2 2.5z"/><path d="M12 11v6M9.5 13.5 12 11l2.5 2.5"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="btn-settings" title="設定" aria-label="設定" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="btn-shot" title="画像として保存（P）" aria-label="画像として保存">
+        <svg viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.5"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="btn-hide" title="UI を隠す（H）" aria-label="UI を隠す">
+        <svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/><path d="M4 20 20 4"/></svg>
+      </button>
+    </nav>
+  </header>
+
+  <section class="hud glass" id="hud" aria-live="off">
+    <div class="clock">
+      <span id="hud-clock">--:--:--</span>
+      <small id="hud-elapsed">経過 0:00</small>
+    </div>
+    <div class="hud-grid">
+      <div class="m"><label>距離</label><b id="hud-dist">0.00</b><i>km</i></div>
+      <div class="m"><label>速度</label><b id="hud-speed">0.0</b><i>km/h</i></div>
+      <div class="m"><label>ペース</label><b id="hud-pace">--'--"</b><i>/km</i></div>
+      <div class="m"><label>標高</label><b id="hud-ele">0</b><i>m</i></div>
+      <div class="m" id="hud-hr-wrap" hidden><label>心拍</label><b id="hud-hr">--</b><i>bpm</i></div>
+    </div>
+  </section>
+
+  <aside class="stats glass" id="stats">
+    <button type="button" class="stats-head" id="stats-toggle" aria-expanded="true">
+      <span>サマリー</span>
+      <svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg>
+    </button>
+    <dl id="stats-list"></dl>
+  </aside>
+
+  <div class="legend glass" id="legend">
+    <div class="legend-title" id="legend-title">速度</div>
+    <div class="legend-bar" id="legend-bar"></div>
+    <div class="legend-scale"><span id="legend-min"></span><span id="legend-max"></span></div>
+  </div>
+
+  <div class="badges">
+    <div class="badge" id="privacy-badge">
+      <svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>
+      <span>端末内で処理・外部送信なし</span>
+    </div>
+    <div class="badge attrib" id="attrib" hidden>
+      出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院（地理院タイル）</a>
+    </div>
+  </div>
+
+  <footer class="timeline glass">
+    <div class="transport">
+      <button type="button" class="icon-btn" id="btn-restart" title="最初から（Home）" aria-label="最初から">
+        <svg viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M18 6 9 12l9 6z" class="fill"/></svg>
+      </button>
+      <button type="button" class="play-btn" id="btn-play" title="再生 / 一時停止（Space）" aria-label="再生">
+        <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5.5v13l11-6.5z" class="fill"/></svg>
+        <svg viewBox="0 0 24 24" class="i-pause"><path d="M8 5v14M16 5v14"/></svg>
+      </button>
+      <label class="rate" title="再生速度（[ と ]）">
+        <select id="rate" aria-label="再生速度"></select>
+      </label>
+    </div>
+    <div class="chart-wrap" id="chart-wrap">
+      <canvas id="chart" aria-label="標高と速度のグラフ。クリックでその地点へ移動"></canvas>
+      <div class="chart-tip" id="chart-tip" hidden></div>
+    </div>
+    <div class="readout">
+      <span id="tl-cur">0:00</span>
+      <span id="tl-total" class="muted">/ 0:00</span>
+    </div>
+  </footer>
+</div>
+
+<div class="settings glass" id="settings" hidden>
+  <h3>表示</h3>
+  <label class="row"><span>色分け</span>
+    <select id="set-metric">
+      <option value="speed">速度</option>
+      <option value="ele">標高</option>
+      <option value="time">時間</option>
+      <option value="grade">勾配</option>
+      <option value="hr">心拍</option>
+    </select>
+  </label>
+  <label class="row"><span>高さの強調</span>
+    <input type="range" id="set-exag" min="1" max="30" step="0.5">
+    <output id="set-exag-out">×1</output>
+  </label>
+  <label class="row"><span>線の太さ</span>
+    <input type="range" id="set-width" min="0.4" max="3" step="0.1">
+    <output id="set-width-out">×1</output>
+  </label>
+  <label class="row"><span>空</span>
+    <select id="set-sky">
+      <option value="auto">記録時刻に合わせる</option>
+      <option value="day">昼</option>
+      <option value="dusk">夕暮れ</option>
+      <option value="night">夜</option>
+    </select>
+  </label>
+  <label class="row check"><input type="checkbox" id="set-ghost"><span>これから歩く道を薄く表示</span></label>
+  <label class="row check"><input type="checkbox" id="set-skip"><span>休憩中は早送り</span></label>
+  <label class="row check"><input type="checkbox" id="set-labels"><span>ラベル（距離・休憩・スタート）</span></label>
+  <label class="row check"><input type="checkbox" id="set-bloom"><span>光のにじみ（ブルーム）</span></label>
+
+  <h3>地図と地形</h3>
+  <label class="row check"><input type="checkbox" id="set-tiles"><span>地理院タイルで地形を作る</span></label>
+  <p class="hint">オンにすると、表示範囲の地図と標高のタイルを国土地理院のサーバーから取得します。GPX ファイルそのものは送信しませんが、取得するタイルの位置から、おおよその場所は相手に伝わります。</p>
+  <label class="row"><span>地図の種類</span>
+    <select id="set-layer">
+      <option value="seamlessphoto">航空写真</option>
+      <option value="std">標準地図</option>
+      <option value="pale">淡色地図</option>
+      <option value="relief">色別標高図</option>
+    </select>
+  </label>
+  <label class="row"><span>道の高さ</span>
+    <select id="set-height">
+      <option value="terrain">地形に沿わせる</option>
+      <option value="gps">GPS の高度を使う</option>
+    </select>
+  </label>
+  <div class="progress" id="tile-progress" hidden><div class="bar"></div><span></span></div>
+
+  <h3>操作</h3>
+  <ul class="keys">
+    <li><kbd>Space</kbd> 再生 / 一時停止</li>
+    <li><kbd>←</kbd><kbd>→</kbd> 少し戻る / 進む</li>
+    <li><kbd>[</kbd><kbd>]</kbd> 再生速度</li>
+    <li><kbd>1</kbd>–<kbd>4</kbd> カメラ切り替え</li>
+    <li><kbd>H</kbd> UI を隠す　<kbd>P</kbd> 画像を保存</li>
+    <li>道をクリックすると、その地点へ移動</li>
+  </ul>
+</div>
+
+<div class="intro" id="intro">
+  <div class="intro-card glass">
+    <div class="intro-logo" aria-hidden="true"></div>
+    <h1>Trailscape</h1>
+    <p class="lead">GPX ログを 3D のジオラマにして、もう一度歩く。</p>
+    <div class="dropzone" id="dropzone">
+      <svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      <b>GPX ファイルをここにドロップ</b>
+      <button type="button" class="btn primary" id="intro-open">ファイルを選ぶ</button>
+    </div>
+    <div class="intro-actions">
+      <button type="button" class="btn" id="intro-demo">デモを見る</button>
+      <button type="button" class="btn" id="intro-last" hidden>前回のファイル</button>
+    </div>
+    <p class="note">
+      <svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>
+      ファイルはこのブラウザの中だけで読み込まれ、どこにも送信されません。
+    </p>
+  </div>
+</div>
+
+<div class="drop-veil" id="drop-veil"><div>ドロップして読み込む</div></div>
+<div class="loading" id="loading" hidden><div class="spinner"></div><span>読み込み中…</span></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="file-input" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
